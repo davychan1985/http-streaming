@@ -28,7 +28,8 @@ QUnit.module('Playback', {
     let done = assert.async();
     let video = document.createElement('video-js');
 
-    video.style = 'display: none;';
+    videojs.log.level('debug');
+    // video.style = 'display: none;';
 
     video.width = 600;
     video.height = 300;
@@ -90,7 +91,7 @@ QUnit.test('replay', function(assert) {
   });
 });
 
-QUnit.skip('playlist with fmp4 and ts segments', function(assert) {
+QUnit.test('playlist with fmp4 and ts segments', function(assert) {
   let done = assert.async();
 
   assert.expect(2);

@@ -1161,22 +1161,20 @@ export class MasterPlaylistController extends videojs.EventTarget {
     // audio). In the future, we may parse codec info from the segments, but for now, we
     // rely on the manifest or defaults, so don't have to wait for the alt audio segment.
 
-    const hasVideo = this.mainSegmentLoader_.startingMedia_.hasVideo;
-    const hasAudio = this.mainSegmentLoader_.startingMedia_.hasAudio ||
-      // alt audio always has audio
-      this.mediaTypes_.AUDIO.activePlaylistLoader;
+    const startingMedia = this.mainSegmentLoader_.startingMedia_;
+    const {hasVideo, videoCodec} = startingMedia;
     const media = this.masterPlaylistLoader_.media();
+    // alt audio always has audio
+    // TODO: should we wait for `trackinfo` from audioSegmentLoader?
+    const hasAudio = startingMedia.hasAudio || !!this.mediaTypes_.AUDIO.activePlaylistLoader;
+    const audioCodec = startingMedia.audioCodec || this.audioSegmentLoader_ && this.audioSegmentLoader_.startingMedia_.audioCodec;
     // get the manifest specified codecs (if there are any) for the selected stream and
     // alt audio from its audio group (if applicable)
     const playlistCodecs = codecsForPlaylist(this.masterPlaylistLoader_.master, media);
-    const codecs = {};
-
-    if (hasVideo) {
-      codecs.video = translateLegacyCodec(playlistCodecs.video) || DEFAULT_VIDEO_CODEC;
-    }
-    if (hasAudio) {
-      codecs.audio = translateLegacyCodec(playlistCodecs.audio) || DEFAULT_AUDIO_CODEC;
-    }
+    const codecs = {
+      audio: hasAudio && (audioCodec || translateLegacyCodec(playlistCodecs.audio) || DEFAULT_AUDIO_CODEC),
+      video: hasVideo && (videoCodec || translateLegacyCodec(playlistCodecs.video) || DEFAULT_VIDEO_CODEC)
+    };
 
     if (!codecs.video && !codecs.audio) {
       const error = 'Failed to create SourceBuffers. No compatible SourceBuffer ' +

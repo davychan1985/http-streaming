@@ -399,6 +399,7 @@ export default class SegmentLoader extends videojs.EventTarget {
    */
   error(error) {
     if (typeof error !== 'undefined') {
+      this.logger_('error occurred:', error);
       this.error_ = error;
     }
 
@@ -454,8 +455,7 @@ export default class SegmentLoader extends videojs.EventTarget {
         resolvedUri: map.resolvedUri,
         byterange: map.byterange,
         bytes: map.bytes,
-        timescales: map.timescales,
-        videoTrackIds: map.videoTrackIds
+        tracks: map.tracks
       };
     }
 
@@ -1203,14 +1203,10 @@ export default class SegmentLoader extends videojs.EventTarget {
     }
 
     // When we have track info, determine what media types this loader is dealing with.
-    if (typeof this.startingMedia_ === 'undefined' &&
-        // Guard against cases where we're not getting track info at all until we are
-        // certain that all streams will provide it.
-        (trackInfo.hasAudio || trackInfo.hasVideo)) {
-      this.startingMedia_ = {
-        hasAudio: trackInfo.hasAudio,
-        hasVideo: trackInfo.hasVideo
-      };
+    // Guard against cases where we're not getting track info at all until we are
+    // certain that all streams will provide it.
+    if (typeof this.startingMedia_ === 'undefined' && (trackInfo.hasAudio || trackInfo.hasVideo)) {
+      this.startingMedia_ = trackInfo;
     }
 
     this.trigger('trackinfo');
@@ -1232,6 +1228,7 @@ export default class SegmentLoader extends videojs.EventTarget {
       // this case, just use the loader type, since fmp4 should always be demuxed.
       mediaType =
         this.loaderType_ === 'main' && this.startingMedia_.hasVideo ? 'video' : 'audio';
+      timeType = mediaType;
     }
 
     const segmentInfo = this.pendingSegment_;
@@ -1554,7 +1551,7 @@ export default class SegmentLoader extends videojs.EventTarget {
 
     this.sourceUpdater_.appendBuffer({type, bytes, videoSegmentTimingInfoCallback}, (error) => {
       if (error) {
-        this.error(error);
+        this.error(`appenderror for ${type} append with ${bytes.length} bytes`);
         // If an append errors, we can't recover.
         // (see https://w3c.github.io/media-source/#sourcebuffer-append-error).
         // Trigger a special error so that it can be handled separately from normal,

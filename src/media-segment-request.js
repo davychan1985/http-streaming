@@ -2,7 +2,7 @@ import videojs from 'video.js';
 import { createTransferableMessage } from './bin-utils';
 import { stringToArrayBuffer } from './util/string-to-array-buffer';
 import { transmux } from './segment-transmuxer';
-import { probeMp4StartTime, probeTsSegment } from './util/segment';
+import { probeTsSegment } from './util/segment';
 import { isLikelyFmp4Data } from './util/codecs';
 import mp4probe from 'mux.js/lib/mp4/probe';
 import { segmentXhrHeaders } from './xhr';
@@ -170,8 +170,18 @@ const handleInitSegmentResponse =
     captionParser.init();
   }
 
-  segment.map.timescales = mp4probe.timescale(segment.map.bytes);
-  segment.map.videoTrackIds = mp4probe.videoTrackIds(segment.map.bytes);
+  const tracks = mp4probe.tracks(segment.map.bytes);
+
+  tracks.forEach(function(track) {
+    segment.map.tracks = segment.map.tracks || {};
+
+    // only support one track of each type for now
+    if (segment.map.tracks[track.type]) {
+      return;
+    }
+
+    segment.map.tracks[track.type] = track;
+  });
 
   return finishProcessingFn(null, segment);
 };
@@ -223,16 +233,15 @@ const handleSegmentResponse = ({
 
   // This is likely an FMP4 and has the init segment.
   // Run through the CaptionParser in case there are captions.
-  if (captionParser && segment.map && segment.map.bytes) {
+  if (captionParser && segment.map && segment.map.track && segment.map.track.video) {
     // Initialize CaptionParser if it hasn't been yet
     if (!captionParser.isInitialized()) {
       captionParser.init();
     }
-
     const parsed = captionParser.parse(
       segment.bytes,
-      segment.map.videoTrackIds,
-      segment.map.timescales);
+      [segment.map.track.video.id],
+      segment.map.track.video.timescales);
 
     if (parsed && parsed.captions && parsed.captions.length > 0) {
       captionsFn(segment, parsed.captions);
@@ -350,39 +359,45 @@ const handleSegmentBytes = ({
 }) => {
   const bytesAsUint8Array = new Uint8Array(bytes);
 
-  segment.isFmp4 =
-    // only set the property the first time we see some bytes so that partial appends
-    // don't try to check every section of bytes (since the check should only consider the
-    // first bytes in the segment)
-    typeof segment.isFmp4 === 'boolean' ? segment.isFmp4 : isLikelyFmp4Data(bytesAsUint8Array);
-
-  if (segment.isFmp4) {
+  if (isLikelyFmp4Data(bytes)) {
+    segment.isFmp4 = true;
+    const videoTrack = segment.map.tracks.video;
+    let audioTrack = segment.map.tracks.audio;
 
     // since we don't support appending fmp4 data on progress, we know we have the full
     // segment here
-    const startTime = probeMp4StartTime(bytesAsUint8Array, segment.map.bytes);
-
-    // we don't parse fmp4 (yet), so we can't provide any track info, however, the
-    // track info callback should still be called before the dataFn is called
-    trackInfoFn(segment, null);
-    // use null for the media type since we don't technically know whether it's audio or
-    // video
+    trackInfoFn(segment, {
+      hasVideo: videoTrack ? true : false,
+      hasAudio: audioTrack ? true : false,
+      audioCodec: (audioTrack || {}).codec,
+      videoCodec: (videoTrack || {}).codec
+    });
     // the probe doesn't provide the segment end time, so only callback with the start
     // (the end time can be roughly calculated by the receiver using the duration)
-    timingInfoFn(segment, null, 'start', startTime);
-    dataFn(segment, { data: bytes });
+    if (audioTrack) {
+      const audioTimingInfo = mp4probe.startTime(audioTrack.timescales, bytesAsUint8Array);
+
+      timingInfoFn(segment, 'audio', 'start', audioTimingInfo);
+    }
+
+    if (videoTrack) {
+      const videoTimingInfo = mp4probe.startTime(videoTrack.timescales, bytesAsUint8Array);
+
+      timingInfoFn(segment, 'video', 'start', videoTimingInfo);
+    }
+    dataFn(segment, {data: bytes});
 
     // Run through the CaptionParser in case there are captions.
     // Initialize CaptionParser if it hasn't been yet
-    if (captionParser && segment.map && segment.map.bytes) {
+    if (captionParser && videoTrack) {
       if (!captionParser.isInitialized()) {
         captionParser.init();
       }
 
       const parsed = captionParser.parse(
         segment.bytes,
-        segment.map.videoTrackIds,
-        segment.map.timescales);
+        [videoTrack.id],
+        videoTrack.timescales);
 
       if (parsed && parsed.captions && parsed.captions.length > 0) {
         captionsFn(segment, parsed.captions);
@@ -731,8 +746,7 @@ export const mediaSegmentRequest = ({
   }
 
   // optionally, request the associated media init segment
-  if (segment.map &&
-    !segment.map.bytes) {
+  if (segment.map && !segment.map.bytes) {
     const initSegmentOptions = videojs.mergeOptions(xhrOptions, {
       uri: segment.map.resolvedUri,
       responseType: 'arraybuffer',
