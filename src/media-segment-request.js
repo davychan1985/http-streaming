@@ -181,6 +181,11 @@ const handleInitSegmentResponse =
     }
 
     segment.map.tracks[track.type] = track;
+
+    if (track.timescale && track.id) {
+      segment.map.timescales = segment.map.timescales || {};
+      segment.map.timescales[track.id] = track.timescale;
+    }
   });
 
   return finishProcessingFn(null, segment);
@@ -241,7 +246,7 @@ const handleSegmentResponse = ({
     const parsed = captionParser.parse(
       segment.bytes,
       [segment.map.track.video.id],
-      segment.map.track.video.timescales);
+      segment.map.track.video.timescale);
 
     if (parsed && parsed.captions && parsed.captions.length > 0) {
       captionsFn(segment, parsed.captions);
@@ -364,6 +369,13 @@ const handleSegmentBytes = ({
     const videoTrack = segment.map.tracks.video;
     let audioTrack = segment.map.tracks.audio;
 
+    // if an init segment has both audio and video
+    // it is muxed
+    if (videoTrack && audioTrack) {
+      videoTrack.codec += `,${audioTrack.codec}`;
+      audioTrack = null;
+    }
+
     // since we don't support appending fmp4 data on progress, we know we have the full
     // segment here
     trackInfoFn(segment, {
@@ -375,13 +387,13 @@ const handleSegmentBytes = ({
     // the probe doesn't provide the segment end time, so only callback with the start
     // (the end time can be roughly calculated by the receiver using the duration)
     if (audioTrack) {
-      const audioTimingInfo = mp4probe.startTime(audioTrack.timescales, bytesAsUint8Array);
+      const audioTimingInfo = mp4probe.trackStartTime(audioTrack, bytesAsUint8Array);
 
       timingInfoFn(segment, 'audio', 'start', audioTimingInfo);
     }
 
     if (videoTrack) {
-      const videoTimingInfo = mp4probe.startTime(videoTrack.timescales, bytesAsUint8Array);
+      const videoTimingInfo = mp4probe.trackStartTime(videoTrack, bytesAsUint8Array);
 
       timingInfoFn(segment, 'video', 'start', videoTimingInfo);
     }
@@ -397,7 +409,7 @@ const handleSegmentBytes = ({
       const parsed = captionParser.parse(
         segment.bytes,
         [videoTrack.id],
-        videoTrack.timescales);
+        videoTrack.timescale);
 
       if (parsed && parsed.captions && parsed.captions.length > 0) {
         captionsFn(segment, parsed.captions);
