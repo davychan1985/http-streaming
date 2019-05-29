@@ -181,11 +181,7 @@ const handleInitSegmentResponse =
     }
 
     segment.map.tracks[track.type] = track;
-
-    if (track.timescale && track.id) {
-      segment.map.timescales = segment.map.timescales || {};
-      segment.map.timescales[track.id] = track.timescale;
-    }
+    track.timescales = track.timescales || {};
   });
 
   return finishProcessingFn(null, segment);
@@ -246,7 +242,7 @@ const handleSegmentResponse = ({
     const parsed = captionParser.parse(
       segment.bytes,
       [segment.map.track.video.id],
-      segment.map.track.video.timescale);
+      segment.map.track.video.timescales);
 
     if (parsed && parsed.captions && parsed.captions.length > 0) {
       captionsFn(segment, parsed.captions);
@@ -364,40 +360,41 @@ const handleSegmentBytes = ({
 }) => {
   const bytesAsUint8Array = new Uint8Array(bytes);
 
-  if (isLikelyFmp4Data(bytes)) {
+  if (isLikelyFmp4Data(bytesAsUint8Array)) {
     segment.isFmp4 = true;
-    const videoTrack = segment.map.tracks.video;
-    let audioTrack = segment.map.tracks.audio;
+    const videoTrack = Object.assign({}, segment.map.tracks.video);
+    let audioTrack = Object.assign({}, segment.map.tracks.audio);
 
     // if an init segment has both audio and video
     // it is muxed
-    if (videoTrack && audioTrack) {
+    if (videoTrack.id && audioTrack.id) {
       videoTrack.codec += `,${audioTrack.codec}`;
-      audioTrack = null;
+      Object.assign(videoTrack.timescales, audioTrack.timescales);
+      audioTrack = {};
     }
 
     // since we don't support appending fmp4 data on progress, we know we have the full
     // segment here
     trackInfoFn(segment, {
-      hasVideo: videoTrack ? true : false,
-      hasAudio: audioTrack ? true : false,
-      audioCodec: (audioTrack || {}).codec,
-      videoCodec: (videoTrack || {}).codec
+      hasVideo: videoTrack.id ? true : false,
+      hasAudio: audioTrack.id ? true : false,
+      audioCodec: audioTrack.codec,
+      videoCodec: videoTrack.codec
     });
     // the probe doesn't provide the segment end time, so only callback with the start
     // (the end time can be roughly calculated by the receiver using the duration)
-    if (audioTrack) {
-      const audioTimingInfo = mp4probe.trackStartTime(audioTrack, bytesAsUint8Array);
+    if (audioTrack.id) {
+      const audioTimingInfo = mp4probe.startTime(audioTrack.timescales, bytesAsUint8Array);
 
       timingInfoFn(segment, 'audio', 'start', audioTimingInfo);
     }
 
-    if (videoTrack) {
-      const videoTimingInfo = mp4probe.trackStartTime(videoTrack, bytesAsUint8Array);
+    if (videoTrack.id) {
+      const videoTimingInfo = mp4probe.startTime(videoTrack.timescales, bytesAsUint8Array);
 
       timingInfoFn(segment, 'video', 'start', videoTimingInfo);
     }
-    dataFn(segment, {data: bytes});
+    dataFn(segment, {data: bytes, type: audioTrack.id ? 'audio' : 'video'});
 
     // Run through the CaptionParser in case there are captions.
     // Initialize CaptionParser if it hasn't been yet
@@ -409,7 +406,7 @@ const handleSegmentBytes = ({
       const parsed = captionParser.parse(
         segment.bytes,
         [videoTrack.id],
-        videoTrack.timescale);
+        videoTrack.timescales);
 
       if (parsed && parsed.captions && parsed.captions.length > 0) {
         captionsFn(segment, parsed.captions);

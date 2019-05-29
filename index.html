@@ -49,6 +49,8 @@
         <optgroup label="hls">
           <option value="https://d2zihajmogu5jn.cloudfront.net/bipbop-advanced/bipbop_16x9_variant.m3u8">Muxed TS with 1 alt Audio, 5 captions</option>
           <option value="https://d2zihajmogu5jn.cloudfront.net/ts-fmp4/index.m3u8">FMP4 and ts both muxed</option>
+          <option value="https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8">FMP4 and captions muxed</option>
+          <option value="https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8">FMP4 hevc</option>
           <option value="https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8">FMP4 unmuxed, many audio/captions</option>
           <option value="https://bitdash-a.akamaihd.net/content/MI201109210084_1/m3u8s-fmp4/f08e80da-bf1d-4e3d-8899-f0f6155f6efa.m3u8">FMP4 unmuxed</option>
           <option value="https://s3.amazonaws.com/bob.jwplayer.com/~alex/121628/new_master.m3u8">ts Audio only</option>
@@ -110,23 +112,22 @@
       var source = document.getElementById('source');
       var debugLogging = document.getElementById('debug-logging');
 
-      debugLogging.addEventListener('change', function(event) {
-        if (event.target.checked) {
-          videojs.log.level('debug');
-        } else {
-          // restore default level
-          videojs.log.level('info')
-        }
-      });
-      // run the change handler for the first time
-      debugLogging.dispatchEvent(new CustomEvent('change'));
 
       // set loadUrl to default source.
       url.value = source.options[0].value;
+      var saveState = function() {
+        if (window.history.replaceState) {
+          window.history.replaceState(null, null,
+            '?debug=' + (debugLogging.checked ? 'true' : 'false') +
+            '&url=' + encodeURIComponent(url.value)
+          )
+        }
+      };
 
       if (URLSearchParams) {
         var params = new URLSearchParams(window.location.search)
         var queryUrl = params.get('url');
+        var queryDebug = params.get('debug');
 
         // if there is a "url" param in the query params set url
         // and selected index to that
@@ -138,7 +139,21 @@
             }
           });
         }
+
+        if (queryDebug) {
+          debugLogging.checked = queryDebug === "false" ? false : true;
+        }
       }
+
+      debugLogging.addEventListener('change', function(event) {
+        saveState();
+        if (event.target.checked) {
+          videojs.log.level('debug');
+        } else {
+          // restore default level
+          videojs.log.level('info')
+        }
+      });
 
       loadUrl.addEventListener('submit', function(event) {
         event.preventDefault();
@@ -149,9 +164,7 @@
           type = 'application/dash+xml';
         }
 
-        if (window.history.replaceState) {
-          window.history.replaceState(null, null, '?url=' + encodeURIComponent(url.value))
-        }
+        saveState();
 
         player.src({
           src: url.value,
@@ -159,6 +172,11 @@
         });
         return false;
       });
+
+      // run the change handler for the first time
+      debugLogging.dispatchEvent(new CustomEvent('change'));
+
+      // run the load url handler for the intial source
       loadUrl.dispatchEvent(new CustomEvent('submit'));
 
       selectSource.addEventListener('submit', function(event) {
@@ -167,7 +185,6 @@
         loadUrl.dispatchEvent(new CustomEvent('submit'));
         return false;
       });
-
 
     }(window, window.videojs));
   </script>

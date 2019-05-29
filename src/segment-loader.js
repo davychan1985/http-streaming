@@ -177,10 +177,7 @@ export default class SegmentLoader extends videojs.EventTarget {
     // we always know the starting media for audio segment loaders (by definition),
     // however, the main segment loader can be any combination, so we must wait for track
     // info to determine the starting media
-    this.startingMedia_ = this.loaderType_ === 'audio' ? {
-      hasAudio: true,
-      hasVideo: false
-    } : void 0;
+    this.startingMedia_ = void 0;
     this.segmentMetadataTrack_ = settings.segmentMetadataTrack;
     this.goalBufferLength_ = settings.goalBufferLength;
     this.sourceType_ = settings.sourceType;
@@ -1343,20 +1340,19 @@ export default class SegmentLoader extends videojs.EventTarget {
 
     const segmentInfo = this.pendingSegment_;
 
-    if (!segmentInfo) {
+    if (!segmentInfo || !this.startingMedia_) {
       // no segment to append any data for
       return false;
     }
 
-    if (this.loaderType_ === 'main' &&
-        !this.handlePartialData_ &&
-        !segmentInfo.videoTimingInfo) {
-      // video timing info is needed before an append can happen, since video time is the
-      // "source of truth"
-      // TODO handle the case where there's no video in the segment, but there is video in
-      // the rendition (this case has only been noticed once before, and content is not
-      // usually configured this way)
-      return false;
+    if (!this.handlePartialData_) {
+      if (this.startingMedia_.hasVideo && !segmentInfo.videoTimingInfo) {
+        return false;
+      }
+
+      if (this.startingMedia_.hasAudio && !segmentInfo.audioTimingInfo) {
+        return false;
+      }
     }
 
     return true;
@@ -1406,17 +1402,11 @@ export default class SegmentLoader extends videojs.EventTarget {
       this.segmentKey(simpleSegment.key, true);
     }
 
-    if (simpleSegment.isFmp4) {
-      this.trigger('fmp4');
-    }
-
     segmentInfo.isFmp4 = simpleSegment.isFmp4;
     segmentInfo.timingInfo = segmentInfo.timingInfo || {};
 
     if (segmentInfo.isFmp4) {
-      // for fmp4 the loader type is used to determine whether audio or video (fmp4 is
-      // always considered demuxed)
-      result.type = this.loaderType_ === 'main' ? 'video' : 'audio';
+      this.trigger('fmp4');
 
       segmentInfo.timingInfo.start =
         segmentInfo[timingInfoPropertyForMedia(result.type)].start;

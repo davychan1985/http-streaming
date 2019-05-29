@@ -28,8 +28,8 @@ QUnit.module('Playback', {
     let done = assert.async();
     let video = document.createElement('video-js');
 
-    videojs.log.level('debug');
-    // video.style = 'display: none;';
+    //videojs.log.level('debug');
+    video.style = 'display: none;';
 
     video.width = 600;
     video.height = 300;
@@ -91,7 +91,7 @@ QUnit.test('replay', function(assert) {
   });
 });
 
-QUnit.test('playlist with fmp4 and ts segments', function(assert) {
+QUnit.test('playlist with fmp4 segments', function(assert) {
   let done = assert.async();
 
   assert.expect(2);
@@ -105,7 +105,7 @@ QUnit.test('playlist with fmp4 and ts segments', function(assert) {
   });
 
   player.src({
-    src: 'https://d2zihajmogu5jn.cloudfront.net/ts-fmp4/index.m3u8',
+    src: 'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8',
     type: 'application/x-mpegURL'
   });
 });
