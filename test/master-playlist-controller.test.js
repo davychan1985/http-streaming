@@ -3148,6 +3148,7 @@ QUnit.test('creates source buffers after first main segment if video only', func
 
 QUnit.test('creates source buffers after second trackinfo if demuxed', function(assert) {
   const done = assert.async();
+
   this.requests.length = 0;
   this.player.dispose();
   this.player = createPlayer();

@@ -28,7 +28,7 @@ QUnit.module('Playback', {
     let done = assert.async();
     let video = document.createElement('video-js');
 
-    //videojs.log.level('debug');
+    // videojs.log.level('debug');
     video.style = 'display: none;';
 
     video.width = 600;
@@ -207,6 +207,7 @@ QUnit.skip('DASH sidx with alt audio should end', function(assert) {
     done();
   });
 
+  /* eslint-disable max-nested-callbacks */
   playFor(player, 1, () => {
     player.currentTime(18);
 
@@ -223,6 +224,7 @@ QUnit.skip('DASH sidx with alt audio should end', function(assert) {
       });
     });
   });
+  /* eslint-enable max-nested-callbacks */
 
   player.src({
     src: 'https://dash.akamaized.net/dash264/TestCases/10a/1/iis_forest_short_poem_multi_lang_480p_single_adapt_aaclc_sidx.mpd',
